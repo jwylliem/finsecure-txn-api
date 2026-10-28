@@ -1,0 +1,45 @@
+name: txn-api-ci
+
+services:
+  jenkins:
+    build: ./jenkins
+    image: txn-api-jenkins:2.580.2
+    user: root   # needs the docker socket, local lab only
+    env_file: .env
+    ports:
+      - "8085:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./secrets/kubeconfig:/run/secrets/kubeconfig:ro
+    depends_on:
+      - sonarqube
+
+  sonarqube:
+    image: sonarqube:26.10.0.133078-community
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      SONAR_SEARCH_JAVAADDITIONALOPTS: "-Dnode.store.allow_mmap=false"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonar_data:/opt/sonarqube/data
+      - sonar_extensions:/opt/sonarqube/extensions
+
+  toolbox:
+    build: ./toolbox
+    image: txn-api-toolbox:1.0
+    init: true
+    ports:
+      - "3001:3001"   # grafana port-forward
+      - "9091:9091"   # prometheus port-forward
+      - "9093:9093"   # alertmanager port-forward
+    volumes:
+      - ..:/work
+      - toolbox_home:/root
+
+volumes:
+  jenkins_home:
+  sonar_data:
+  sonar_extensions:
+  toolbox_home:

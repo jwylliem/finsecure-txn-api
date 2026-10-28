@@ -1,0 +1,8 @@
+target
+.git
+ci
+k8s
+monitoring
+infra
+docs
+*.md
