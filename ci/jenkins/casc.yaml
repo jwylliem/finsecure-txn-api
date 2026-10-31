@@ -1,0 +1,88 @@
+jenkins:
+  systemMessage: "FinSecure txn-api CI"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "IMAGE_REPO"
+            value: "${IMAGE_REPO}"
+          - key: "REGISTRY_HOST"
+            value: "${REGISTRY_HOST:-}"
+          - key: "APP_URL"
+            value: "${APP_URL:-}"
+          - key: "NOTIFY_EMAIL"
+            value: "${NOTIFY_EMAIL}"
+
+# secrets come from ci/.env
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              id: "dockerhub"
+              description: "Docker Hub access token"
+              scope: GLOBAL
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_TOKEN}"
+          - string:
+              id: "sonar-token"
+              description: "SonarQube analysis token"
+              scope: GLOBAL
+              secret: "${SONAR_TOKEN}"
+          - usernamePassword:
+              id: "smtp"
+              description: "SMTP login for notifications"
+              scope: GLOBAL
+              username: "${SMTP_USER}"
+              password: "${SMTP_PASSWORD}"
+          - file:
+              id: "kubeconfig"
+              description: "kubeconfig for jenkins-deployer service account"
+              scope: GLOBAL
+              fileName: "kubeconfig"
+              secretBytes: "${readFileBase64:/run/secrets/kubeconfig}"
+
+unclassified:
+  location:
+    url: "http://localhost:8085/"
+    adminAddress: "${SMTP_FROM}"
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: "sonarqube"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonar-token"
+  email-ext:
+    mailAccount:
+      address: "${SMTP_FROM}"
+      smtpHost: "${SMTP_HOST}"
+      smtpPort: "${SMTP_PORT}"
+      credentialsId: "smtp"
+      useTls: ${SMTP_TLS:-true}
+    defaultRecipients: "${NOTIFY_EMAIL}"
+    defaultContentType: "text/html"
+
+jobs:
+  - script: >
+      pipelineJob('txn-api') {
+        description('txn-api pipeline')
+        properties {
+          pipelineTriggers { triggers { pollSCM { scmpoll_spec('H/2 * * * *') } } }
+        }
+        definition {
+          cpsScm {
+            scm { git { remote { url('${GIT_REPO_URL}') }; branch('*/main') } }
+            scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }
