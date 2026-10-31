@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: txn-api
+  namespace: finsecure
+  labels:
+    app: txn-api
+spec:
+  type: LoadBalancer
+  selector:
+    app: txn-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
