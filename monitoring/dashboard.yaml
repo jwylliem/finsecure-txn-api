@@ -1,0 +1,14 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "txn-api-dashboard",
+    "namespace": "finsecure",
+    "labels": {
+      "grafana_dashboard": "1"
+    }
+  },
+  "data": {
+    "txn-api.json": "{\n \"title\": \"Txn API\",\n \"uid\": \"txn-api\",\n \"schemaVersion\": 39,\n \"refresh\": \"10s\",\n \"time\": {\n  \"from\": \"now-30m\",\n  \"to\": \"now\"\n },\n \"panels\": [\n  {\n   \"id\": 1,\n   \"type\": \"timeseries\",\n   \"title\": \"Validations per second\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"gridPos\": {\n    \"h\": 8,\n    \"w\": 12,\n    \"x\": 0,\n    \"y\": 0\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (result) (rate(txn_validations_total[2m]))\",\n     \"legendFormat\": \"{{result}}\",\n     \"datasource\": {\n      \"type\": \"prometheus\",\n      \"uid\": \"prometheus\"\n     }\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"ops\"\n    },\n    \"overrides\": []\n   }\n  },\n  {\n   \"id\": 2,\n   \"type\": \"timeseries\",\n   \"title\": \"Pod memory\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"gridPos\": {\n    \"h\": 8,\n    \"w\": 12,\n    \"x\": 12,\n    \"y\": 0\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (pod) (container_memory_working_set_bytes{namespace=\\\"finsecure\\\",container=\\\"app\\\"})\",\n     \"legendFormat\": \"{{pod}}\",\n     \"datasource\": {\n      \"type\": \"prometheus\",\n      \"uid\": \"prometheus\"\n     }\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"bytes\"\n    },\n    \"overrides\": []\n   }\n  },\n  {\n   \"id\": 3,\n   \"type\": \"timeseries\",\n   \"title\": \"Pod CPU\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"gridPos\": {\n    \"h\": 8,\n    \"w\": 12,\n    \"x\": 0,\n    \"y\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\\\"finsecure\\\",container=\\\"app\\\"}[2m]))\",\n     \"legendFormat\": \"{{pod}}\",\n     \"datasource\": {\n      \"type\": \"prometheus\",\n      \"uid\": \"prometheus\"\n     }\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"short\"\n    },\n    \"overrides\": []\n   }\n  }\n ]\n}"
+  }
+}

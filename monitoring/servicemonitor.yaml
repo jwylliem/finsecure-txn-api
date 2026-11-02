@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: txn-api
+  namespace: finsecure
+spec:
+  selector:
+    matchLabels:
+      app: txn-api
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
