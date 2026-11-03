@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Txn API Design Document</title>
+<style>
+  @page { size: A4; margin: 18mm 18mm 16mm; }
+  body { font-family: Calibri, Arial, sans-serif; font-size: 10.5pt; line-height: 1.38; }
+  h1 { font-size: 16pt; margin: 0 0 2pt; }
+  h2 { font-size: 12.5pt; margin: 12pt 0 3pt; }
+  h2 { break-after: avoid; }
+  p, ul { margin: 3pt 0; }
+  ul { padding-left: 16pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; margin: 4pt 0; }
+  th, td { border: 1px solid #999; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+  th { background: #eee; }
+  figure { margin: 6pt 0; break-inside: avoid; }
+  .mermaid { text-align: center; margin: 0; }
+  .mermaid svg { max-width: 78% !important; height: auto; }
+  figcaption { font-size: 9pt; color: #444; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>FinSecure Txn API &ndash; Design Document</h1>
+<p>Jonathan Wylliem<br>
+GitHub: <code>https://github.com/YOUR_GITHUB_USER/finsecure-txn-api</code><br>
+Docker Hub: <code>https://hub.docker.com/r/YOUR_DOCKERHUB_USER/finsecure-txn-api</code><br>
+Demo video: <code>DEMO_VIDEO_URL</code></p>
+
+<h2>1. Introduction</h2>
+<p>FinSecure Pay want to deploy their transaction validation API faster and with less manual steps. In this project I build a small Spring Boot API with a <code>/health</code> and a <code>/validate</code> endpoint, and a Jenkins pipeline that build, test, scan and deploy it to Amazon EKS. Prometheus and Grafana is used for monitoring and alert is sent by email.</p>
+
+<h2>2. Architecture</h2>
+<figure>
+<pre class="mermaid">
+flowchart TB
+  dev(["Developer"]) --> gh["GitHub"]
+  gh --> jen["Jenkins<br/>build, test, scan"]
+  jen --> sonar["SonarQube + Trivy"]
+  jen --> hub[("Docker Hub")]
+  jen --> eks
+  subgraph eks["Amazon&nbsp;EKS"]
+    lb["LoadBalancer"] --> pods["txn-api pods x2"]
+    pods --> prom["Prometheus / Grafana"]
+  end
+  hub --> pods
+  user(["Users"]) --> lb
+  prom --> mail(["Email alert"])
+</pre>
+<figcaption>Figure 1: Architecture</figcaption>
+</figure>
+
+<h2>3. Tools used</h2>
+<table>
+<tr><th>Area</th><th>Tool</th><th>Reason</th></tr>
+<tr><td>Source control</td><td>Git, GitHub</td><td>recommended in brief</td></tr>
+<tr><td>Application</td><td>Spring Boot, Maven, JUnit 5</td><td>recommended in brief, I used Java before</td></tr>
+<tr><td>CI/CD</td><td>Jenkins with Jenkinsfile</td><td>recommended, run in Docker on my laptop and configured with JCasC</td></tr>
+<tr><td>Container</td><td>Docker, Docker Hub</td><td>free registry</td></tr>
+<tr><td>Kubernetes</td><td>Amazon EKS (eksctl)</td><td>we used AWS in earlier modules, eksctl create cluster from one file</td></tr>
+<tr><td>Security</td><td>SonarQube, Trivy</td><td>Trivy is used instead of OWASP Dependency-Check because it is faster and also can scan the image and secrets</td></tr>
+<tr><td>Monitoring</td><td>Prometheus, Grafana, Alertmanager</td><td>kube-prometheus-stack helm chart install all in one go</td></tr>
+<tr><td>Logging</td><td><code>kubectl logs</code></td><td>simple, enough for a small app</td></tr>
+<tr><td>Notification</td><td>Jenkins Email Extension, Gmail SMTP</td><td>recommended</td></tr>
+</table>
+
+<h2>4. Design decisions</h2>
+<ul>
+<li>The Deployment have 2 replicas so if one pod die the app still work.</li>
+<li>Readiness and liveness probe use the Spring Boot actuator health endpoints.</li>
+<li>The max amount and currencies are in a ConfigMap so they can change without rebuild the image.</li>
+<li>Image tag is version + build number + git commit, e.g. <code>1.0.0-5-a1b2c3d</code>.</li>
+<li>Dockerfile is multi-stage so the final image only have the JRE and run as non-root user.</li>
+<li>Nodes are t4g.medium (arm64) because my Mac build arm64 images.</li>
+<li>Jenkins check GitHub every 2 minutes (poll SCM) because it run on my laptop and cannot receive webhook.</li>
+</ul>
+
+<h2>5. Security</h2>
+<ul>
+<li>SonarQube quality gate, Trivy dependency scan, Trivy secret scan and Trivy image scan run in the pipeline. HIGH or CRITICAL vulnerability fail the pipeline so the image is not pushed.</li>
+<li>To test, I added <code>commons-text 1.9</code> which have CVE-2022-42889 (critical). The pipeline was blocked. After upgrade to a fixed version it pass.</li>
+<li>Passwords and tokens are stored in Jenkins credentials (loaded from a <code>.env</code> file not committed to git). The API key of the app is a Kubernetes Secret.</li>
+<li>Jenkins use a separate service account that only can deploy in the <code>finsecure</code> namespace.</li>
+</ul>
+
+<h2>6. Recovery</h2>
+<ul>
+<li>If a pod is deleted or crash, Kubernetes create a new one automatically (shown in demo).</li>
+<li>If the new version rollout fail, Jenkins run <code>kubectl rollout undo</code>. We can also rollback manually with the <code>ROLLBACK_TO</code> parameter.</li>
+<li>If a test fail, the pipeline stop and nothing is deployed.</li>
+</ul>
+
+<h2>7. AI use case: AI for alert analysis</h2>
+<p><b>Problem:</b> when an alert come in, the engineer need time to check logs and metrics to find the cause. AI (a large language model) can read the logs and alert and give a summary of the possible cause faster than a human.</p>
+<p><b>Inputs:</b> the alert from Alertmanager, recent pod logs, metrics from Prometheus and the recent deployments.</p>
+<p><b>Benefits:</b> faster troubleshooting, less time to recover, help junior engineers.</p>
+<p><b>Risks:</b> AI can give wrong answer, so human must check before taking action. Logs may contain customer data so it must be masked before sending to AI. There is also cost for using the AI service.</p>
+<p><b>Integration:</b> Alertmanager can send a webhook to a small service which collect the logs and call the AI API, then send the summary by email together with the alert.</p>
+
+<h2>8. Lessons learned and future improvements</h2>
+<ul>
+<li>Setting up Jenkins took the most time, a bit sian at first, but using JCasC helped to rebuild it quickly.</li>
+<li>A test found a bug where a missing currency crash the validator, so unit tests are useful.</li>
+<li>Future: add HPA for auto scaling, centralised logging (EFK or CloudWatch), more alerts, and GitOps with Argo CD.</li>
+</ul>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</body>
+</html>
