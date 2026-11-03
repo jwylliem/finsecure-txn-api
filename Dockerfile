@@ -8,6 +8,8 @@ RUN mvn -B -q -ntp package -DskipTests
 
 # runtime stage - only the JRE + jar, run as non root
 FROM eclipse-temurin:21.0.13_9-jre-alpine
+# patch os packages, base image lag behind the alpine fixs
+RUN apk upgrade --no-cache
 RUN addgroup -S app && adduser -S -G app -u 10001 app
 WORKDIR /app
 COPY --from=build /src/target/app.jar app.jar
