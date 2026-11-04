@@ -6,3 +6,5 @@ metadata:
 data:
   TXN_MAX_AMOUNT: "5000"
   TXN_CURRENCIES: "SGD,USD"
+  # json logs (ecs format) so can filter by field
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: "ecs"

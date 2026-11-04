@@ -61,14 +61,20 @@ flowchart TB
 <tr><td>Kubernetes</td><td>Amazon EKS (eksctl)</td><td>we used AWS in earlier modules, eksctl create cluster from one file</td></tr>
 <tr><td>Security</td><td>SonarQube, Trivy</td><td>Trivy is used instead of OWASP Dependency-Check because it is faster and also can scan the image and secrets</td></tr>
 <tr><td>Monitoring</td><td>Prometheus, Grafana, Alertmanager</td><td>kube-prometheus-stack helm chart install all in one go</td></tr>
-<tr><td>Logging</td><td><code>kubectl logs</code></td><td>simple, enough for a small app</td></tr>
+<tr><td>Logging</td><td><code>kubectl logs</code> with JSON (ECS) format, <code>jq</code></td><td>simple, enough for a small app, JSON make it easy to filter by level or message</td></tr>
 <tr><td>Notification</td><td>Jenkins Email Extension, Gmail SMTP</td><td>recommended</td></tr>
 </table>
 
 <h2>4. Design decisions</h2>
 <ul>
-<li>The Deployment have 2 replicas so if one pod die the app still work.</li>
-<li>Readiness and liveness probe use the Spring Boot actuator health endpoints.</li>
+<li>EKS was chosen because AWS manage the control plane, so I only take care of the nodes. 2 nodes so if one node down the app still running.</li>
+<li>The app always have at least 2 pods. A HorizontalPodAutoscaler scale it from 2 to 4 pods when CPU is above 70% of the request. The metrics-server add-on give the CPU numbers.</li>
+<li>A PodDisruptionBudget keep at least 1 pod running when a node is drained or upgraded.</li>
+<li>Each pod request 250m CPU and 384Mi memory, limit 1 CPU and 512Mi. The numbers come from Grafana, the app use around 200-250Mi when running, so there is some space.</li>
+<li>Rolling update use maxUnavailable 0, so the old pod only removed after the new pod is ready (no downtime).</li>
+<li>A startup probe give the JVM up to 2 minutes to start, then readiness and liveness probe (Spring Boot actuator) take over.</li>
+<li>Pods run as non-root user 10001, no privilege escalation and all Linux capabilities dropped.</li>
+<li>The service is a LoadBalancer so AWS create a load balancer with a public address for testing.</li>
 <li>The max amount and currencies are in a ConfigMap so they can change without rebuild the image.</li>
 <li>Image tag is version + build number + git commit, e.g. <code>1.0.0-5-a1b2c3d</code>.</li>
 <li>Dockerfile is multi-stage so the final image only have the JRE and run as non-root user.</li>
@@ -91,18 +97,25 @@ flowchart TB
 <li>If a test fail, the pipeline stop and nothing is deployed.</li>
 </ul>
 
-<h2>7. AI use case: AI for alert analysis</h2>
+<h2>7. Monitoring and logging</h2>
+<ul>
+<li>Grafana dashboard have 6 panels: validations per second (valid/invalid), /validate p95 latency, ready pods vs HPA desired, pod restarts, CPU and memory.</li>
+<li>3 alerts go to email by Alertmanager: many invalid transactions (warning), less than 2 ready pods (critical) and p95 latency above 500ms (warning).</li>
+<li>Logs are JSON so we can filter with jq, e.g. only the invalid transaction or only ERROR. Steps are in the README.</li>
+</ul>
+
+<h2>8. AI use case: AI for alert analysis</h2>
 <p><b>Problem:</b> when an alert come in, the engineer need time to check logs and metrics to find the cause. AI (a large language model) can read the logs and alert and give a summary of the possible cause faster than a human.</p>
 <p><b>Inputs:</b> the alert from Alertmanager, recent pod logs, metrics from Prometheus and the recent deployments.</p>
 <p><b>Benefits:</b> faster troubleshooting, less time to recover, help junior engineers.</p>
 <p><b>Risks:</b> AI can give wrong answer, so human must check before taking action. Logs may contain customer data so it must be masked before sending to AI. There is also cost for using the AI service.</p>
 <p><b>Integration:</b> Alertmanager can send a webhook to a small service which collect the logs and call the AI API, then send the summary by email together with the alert.</p>
 
-<h2>8. Lessons learned and future improvements</h2>
+<h2>9. Lessons learned and future improvements</h2>
 <ul>
 <li>Setting up Jenkins took the most time, a bit sian at first, but using JCasC helped to rebuild it quickly.</li>
 <li>A test found a bug where a missing currency crash the validator, so unit tests are useful.</li>
-<li>Future: add HPA for auto scaling, centralised logging (EFK or CloudWatch), more alerts, and GitOps with Argo CD.</li>
+<li>Future: centralised logging (EFK or CloudWatch), HTTPS with an Ingress, and GitOps with Argo CD.</li>
 </ul>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>

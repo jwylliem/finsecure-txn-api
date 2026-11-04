@@ -1,0 +1,11 @@
+# keep at least 1 pod up when node is drain or upgrade
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: txn-api
+  namespace: finsecure
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: txn-api

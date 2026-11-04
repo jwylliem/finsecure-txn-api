@@ -6,7 +6,13 @@ metadata:
   annotations:
     kubernetes.io/change-cause: "CHANGE_CAUSE"
 spec:
-  replicas: 2
+  # no replicas here, the hpa own the replica count (min 2)
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: txn-api
@@ -15,6 +21,11 @@ spec:
       labels:
         app: txn-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app
           image: IMAGE_PLACEHOLDER
@@ -29,15 +40,33 @@ spec:
                 secretKeyRef:
                   name: txn-api-secret
                   key: api-key
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # jvm start is slow, give it up to 2 min before liveness kick in
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: 8080
-            initialDelaySeconds: 15
             periodSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8080
-            initialDelaySeconds: 40
             periodSeconds: 10
+            failureThreshold: 3

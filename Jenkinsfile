@@ -124,7 +124,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh '''
-                      kubectl apply -f k8s/configmap.yaml
+                      kubectl apply -f k8s/configmap.yaml -f k8s/hpa.yaml -f k8s/pdb.yaml
                       sed -e "s|IMAGE_PLACEHOLDER|${IMAGE_REPO}:${TAG}|" -e "s|CHANGE_CAUSE|jenkins build ${BUILD_NUMBER}: ${TAG}|" \
                           k8s/deployment.yaml | kubectl apply -f -
                       if ! kubectl -n $NAMESPACE rollout status deployment/$DEPLOYMENT --timeout=180s; then
@@ -133,7 +133,7 @@ pipeline {
                         kubectl -n $NAMESPACE rollout status deployment/$DEPLOYMENT --timeout=180s
                         exit 1
                       fi
-                      kubectl -n $NAMESPACE get pods -o wide
+                      kubectl -n $NAMESPACE get pods,hpa,pdb -o wide
                     '''
                 }
             }
