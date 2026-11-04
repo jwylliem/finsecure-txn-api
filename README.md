@@ -31,9 +31,9 @@ curl localhost:8080/health
 ## Folders
 
 - `src/` - code and tests
-- `k8s/` - deployment and configmap, `k8s/bootstrap/` namespace, service and jenkins service account
+- `k8s/` - deployment, configmap, hpa and pdb, `k8s/bootstrap/` namespace, service and jenkins service account
 - `ci/` - docker compose for Jenkins, SonarQube and toolbox
-- `monitoring/` - prometheus stack values, alert rule, dashboard
+- `monitoring/` - prometheus stack values, alert rules, dashboard
 - `infra/` - eksctl cluster file
 
 ## Pipeline
@@ -41,8 +41,23 @@ curl localhost:8080/health
 Checkout, Build, Test, Package, Security Checks (SonarQube, Trivy dependency, Trivy secret), Container Build, Image Scan, Push, Deploy, Smoke Test.
 To rollback run "Build with Parameters" and put the old tag in `ROLLBACK_TO`.
 
-## Logs
+## Logs and troubleshooting
+
+Logs are JSON (ECS format), so can use jq to filter.
 
 ```
-kubectl -n finsecure logs -l app=txn-api --tail=100
+# last 100 lines of all pods
+kubectl -n finsecure logs -l app=txn-api --tail=100 --prefix
+# only invalid transaction
+kubectl -n finsecure logs -l app=txn-api --tail=500 | jq -r 'select(.message|test("is invalid")) | ."@timestamp" + " " + .message'
+# only warning and error
+kubectl -n finsecure logs -l app=txn-api --tail=500 | jq 'select(.log.level == "WARN" or .log.level == "ERROR")'
+# logs of a pod that crash (previous container)
+kubectl -n finsecure logs <pod> --previous
 ```
+
+When an alert come:
+
+1. `TxnApiHighInvalidRate` - check the invalid logs above, see which error is most common (wrong currency, over limit) and which client send it.
+2. `TxnApiPodsUnavailable` - `kubectl -n finsecure get pods` and `kubectl -n finsecure describe pod <pod>`, look at events (OOMKilled, probe failed, image pull error). If it start after a deploy, rollback with `ROLLBACK_TO`.
+3. `TxnApiHighLatency` - check CPU panel and `kubectl -n finsecure get hpa`, if already 4 pods and CPU still high, raise maxReplicas or the CPU limit.

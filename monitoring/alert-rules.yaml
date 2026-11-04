@@ -15,3 +15,20 @@ spec:
             team: finsecure
           annotations:
             summary: "More than 1 invalid transaction per second"
+        # less than 2 ready pod mean no more redundency
+        - alert: TxnApiPodsUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="finsecure", deployment="txn-api"} < 2
+          for: 1m
+          labels:
+            severity: critical
+            team: finsecure
+          annotations:
+            summary: "txn-api has only {{ $value }} ready pod"
+        - alert: TxnApiHighLatency
+          expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{namespace="finsecure", uri="/validate"}[5m]))) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team: finsecure
+          annotations:
+            summary: "/validate p95 latency is above 500ms"
