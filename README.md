@@ -43,15 +43,15 @@ To rollback run "Build with Parameters" and put the old tag in `ROLLBACK_TO`.
 
 ## Logs and troubleshooting
 
-Logs are JSON (ECS format), so can use jq to filter.
+Logs are JSON (ECS format), so can use jq to filter. `-R 'fromjson?'` skip the spring banner line that is not json.
 
 ```
 # last 100 lines of all pods
 kubectl -n finsecure logs -l app=txn-api --tail=100 --prefix
 # only invalid transaction
-kubectl -n finsecure logs -l app=txn-api --tail=500 | jq -r 'select(.message|test("is invalid")) | ."@timestamp" + " " + .message'
+kubectl -n finsecure logs -l app=txn-api --tail=500 | jq -rR 'fromjson? | select(.message|test("is invalid")) | ."@timestamp" + " " + .message'
 # only warning and error
-kubectl -n finsecure logs -l app=txn-api --tail=500 | jq 'select(.log.level == "WARN" or .log.level == "ERROR")'
+kubectl -n finsecure logs -l app=txn-api --tail=500 | jq -R 'fromjson? | select(.log.level == "WARN" or .log.level == "ERROR")'
 # logs of a pod that crash (previous container)
 kubectl -n finsecure logs <pod> --previous
 ```
